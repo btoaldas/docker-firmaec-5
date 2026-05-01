@@ -1,0 +1,34 @@
+# Forzar finales de línea LF (Unix) — crítico para scripts ejecutados dentro
+# de contenedores Linux y para Dockerfiles.
+* text=auto eol=lf
+
+*.sh         text eol=lf
+*.cli        text eol=lf
+*.tpl        text eol=lf
+Dockerfile   text eol=lf
+*.yml        text eol=lf
+*.yaml       text eol=lf
+*.sql        text eol=lf
+*.md         text eol=lf
+*.php        text eol=lf
+*.js         text eol=lf
+*.css        text eol=lf
+*.html       text eol=lf
+*.xml        text eol=lf
+.env*        text eol=lf
+.gitignore   text eol=lf
+.gitattributes text eol=lf
+
+# Binarios — nunca convertir
+*.zip        binary
+*.tar.gz     binary
+*.tgz        binary
+*.jar        binary
+*.war        binary
+*.p12        binary
+*.pfx        binary
+*.pdf        binary
+*.png        binary
+*.jpg        binary
+*.jpeg       binary
+*.ico        binary

@@ -1,0 +1,115 @@
+# syntax=docker/dockerfile:1.6
+# ============================================================================
+# Build pipeline FirmaEC: ZIPs MINKA -> WARs + libreria.jar
+# ============================================================================
+# 4 stages:
+#   1. extractor: descomprime ZIPs de recursos-minka/<version>/
+#   2. patcher:   aplica patches BUILD imprescindibles
+#   3. builder:   compila con Maven 3.8.8 + JDK 17
+#   4. export:    empaqueta artefactos finales con manifiesto
+#
+# Selector de versión:
+#   docker build --build-arg FIRMAEC_VERSION=5.1 -f wildfly/Dockerfile.build .
+# ============================================================================
+
+ARG FIRMAEC_VERSION=5.1
+
+
+# ---------- Stage 1: extractor ----------
+FROM alpine:3.20 AS extractor
+ARG FIRMAEC_VERSION
+RUN apk add --no-cache unzip bash
+
+WORKDIR /sources
+COPY recursos/minka/${FIRMAEC_VERSION}/ /zips/
+
+RUN set -eux; \
+    cd /zips; \
+    LIB=$(ls firmadigital-libreria*.zip 2>/dev/null | head -1); \
+    API=$(ls firmadigital-api*.zip      2>/dev/null | head -1); \
+    SVC=$(ls firmadigital-servicio*.zip 2>/dev/null | head -1); \
+    if [ -z "$LIB" ] || [ -z "$API" ] || [ -z "$SVC" ]; then \
+        echo "ERROR: faltan ZIPs en recursos/minka/${FIRMAEC_VERSION}/"; \
+        echo "Esperados: firmadigital-libreria*.zip, firmadigital-api*.zip, firmadigital-servicio*.zip"; \
+        ls -la /zips; \
+        exit 1; \
+    fi; \
+    mkdir -p /tmp/lib /tmp/api /tmp/svc; \
+    unzip -q "$LIB" -d /tmp/lib; \
+    unzip -q "$API" -d /tmp/api; \
+    unzip -q "$SVC" -d /tmp/svc; \
+    LIB_TOP=$(ls /tmp/lib | head -1); \
+    API_TOP=$(ls /tmp/api | head -1); \
+    SVC_TOP=$(ls /tmp/svc | head -1); \
+    mv "/tmp/lib/${LIB_TOP}" /sources/libreria; \
+    mv "/tmp/api/${API_TOP}" /sources/api; \
+    mv "/tmp/svc/${SVC_TOP}" /sources/servicio; \
+    ls -la /sources
+
+
+# ---------- Stage 2: patcher ----------
+FROM alpine:3.20 AS patcher
+RUN apk add --no-cache patch git bash
+
+COPY --from=extractor /sources/ /sources/
+COPY wildfly/patches/        /patches/
+COPY wildfly/apply-patches.sh /usr/local/bin/apply-patches.sh
+
+RUN chmod +x /usr/local/bin/apply-patches.sh && \
+    /usr/local/bin/apply-patches.sh /sources /patches
+
+
+# ---------- Stage 3: builder ----------
+FROM maven:3.8.8-eclipse-temurin-17 AS builder
+
+COPY --from=patcher /sources/ /build/
+WORKDIR /build
+
+# Cache de Maven repo entre builds
+ENV MAVEN_OPTS="-Dmaven.repo.local=/root/.m2/repository"
+
+# Orden crítico: libreria -> install (genera JAR para repo local) -> servicio/api -> package
+RUN cd /build/libreria && mvn -B -DskipTests clean install
+RUN cd /build/servicio && mvn -B -DskipTests clean package
+RUN cd /build/api      && mvn -B -DskipTests clean package
+
+# Validar tamaño mínimo (sanity check)
+RUN set -eux; \
+    cp /build/servicio/target/servicio.war  /tmp/servicio.war; \
+    cp /build/api/target/api.war            /tmp/api.war; \
+    LIB_JAR=$(ls /build/libreria/target/libreria-*.jar | grep -v sources | head -1); \
+    cp "$LIB_JAR" /tmp/libreria.jar; \
+    SZ_SVC=$(stat -c%s /tmp/servicio.war); \
+    SZ_API=$(stat -c%s /tmp/api.war); \
+    SZ_LIB=$(stat -c%s /tmp/libreria.jar); \
+    echo "Tamaños: servicio=${SZ_SVC} api=${SZ_API} libreria=${SZ_LIB}"; \
+    [ "$SZ_SVC" -ge 1000000 ] || { echo "FAIL: servicio.war < 1MB ($SZ_SVC)"; exit 1; }; \
+    [ "$SZ_API" -ge 50000   ] || { echo "FAIL: api.war < 50KB ($SZ_API)"; exit 1; }; \
+    [ "$SZ_LIB" -ge 100000  ] || { echo "FAIL: libreria.jar < 100KB ($SZ_LIB)"; exit 1; }
+
+
+# ---------- Stage 4: export ----------
+FROM alpine:3.20 AS export
+ARG FIRMAEC_VERSION
+RUN apk add --no-cache coreutils
+
+WORKDIR /artifacts
+COPY --from=builder /tmp/servicio.war /artifacts/servicio.war
+COPY --from=builder /tmp/api.war      /artifacts/api.war
+COPY --from=builder /tmp/libreria.jar /artifacts/libreria.jar
+
+RUN set -eux; \
+    { \
+      echo "FirmaEC build artifacts"; \
+      echo "Version: ${FIRMAEC_VERSION}"; \
+      echo "Fecha:   $(date -u +%Y-%m-%dT%H:%M:%SZ)"; \
+      echo ""; \
+      echo "SHA256:"; \
+      sha256sum *.war *.jar; \
+      echo ""; \
+      echo "Tamaños (bytes):"; \
+      ls -la *.war *.jar; \
+    } > /artifacts/version-manifest.txt; \
+    cat /artifacts/version-manifest.txt
+
+CMD ["sh", "-c", "ls -lh /artifacts && echo --- && cat /artifacts/version-manifest.txt"]

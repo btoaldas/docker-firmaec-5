@@ -1,0 +1,24 @@
+From: docker-firmaec-5
+Subject: [PATCH] servicio: sincronizar version de dependencia libreria a 5.1.0-SNAPSHOT
+
+El pom.xml de servicio en master declara dependencia a libreria-5.0.0-SNAPSHOT,
+pero la libreria upstream actual ya esta en 5.1.0-SNAPSHOT. Sin esta sincronizacion
+Maven busca un artefacto que no existe en el repo local y falla con
+"Could not find artifact ec.gob.firmadigital:libreria:jar:5.0.0-SNAPSHOT".
+
+Bug upstream: pendiente de MR en MINKA.
+---
+ servicio/pom.xml | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+--- a/servicio/pom.xml
++++ b/servicio/pom.xml
+@@ -51,7 +51,7 @@
+         <dependency>
+             <groupId>ec.gob.firmadigital</groupId>
+             <artifactId>libreria</artifactId>
+-            <version>5.0.0-SNAPSHOT</version>
++            <version>5.1.0-SNAPSHOT</version>
+         </dependency>
+         <!--consumo de servicios web-->
+         <dependency>

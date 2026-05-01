@@ -1,0 +1,40 @@
+# Fuentes upstream MINKA — no se commiten, cada quien las descarga
+recursos/minka/*/*.zip
+recursos/minka/*/*.tar.gz
+recursos/minka/*/*.tgz
+
+# Maven / WildFly binarios opcionales (offline build, futuro)
+recursos/maven/*.tar.gz
+recursos/maven/*.zip
+recursos/wildfly/*.zip
+recursos/wildfly/*.tar.gz
+
+# Variables de entorno locales
+.env
+.env.local
+.env.*.local
+
+# Artefactos de build (generados por build.sh)
+wildfly/build-artifacts/*.war
+wildfly/build-artifacts/*.jar
+wildfly/build-artifacts/version-manifest.txt
+!wildfly/build-artifacts/.gitkeep
+
+# Salida Maven local (si alguien construye fuera de Docker)
+target/
+
+# Editores / SO
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Datos PostgreSQL (volumen persistente)
+postgres-data/
+pgdata/

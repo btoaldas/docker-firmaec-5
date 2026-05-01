@@ -1,0 +1,30 @@
+From: docker-firmaec-5
+Subject: [PATCH] api: marcar jakarta.activation-api y resteasy-jaxrs como provided
+
+WildFly 36 (Jakarta EE 11) ya provee jakarta.activation-api y RESTEasy.
+Sin scope=provided estas clases se shadean dentro del WAR y colisionan con
+las del servidor, provocando que los endpoints REST devuelvan HTML 404 en
+lugar de JSON al ser invocados.
+
+Bug upstream: pendiente de MR en MINKA.
+---
+ api/pom.xml | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/api/pom.xml
++++ b/api/pom.xml
+@@ -62,12 +62,14 @@
+             <groupId>jakarta.activation</groupId>
+             <artifactId>jakarta.activation-api</artifactId>
+             <version>2.1.4</version>
++            <scope>provided</scope>
+         </dependency>
+         <dependency>
+             <groupId>org.jboss.resteasy</groupId>
+             <artifactId>resteasy-jaxrs</artifactId>
+             <version>3.15.6.Final</version>
+             <type>jar</type>
++            <scope>provided</scope>
+         </dependency>
+         <!--consumo de servicios web-->
+         <dependency>

@@ -1,0 +1,29 @@
+From: docker-firmaec-5
+Subject: [PATCH] api: declarar sourceDirectory NetBeans (src/java en lugar de src/main/java)
+
+El modulo api del MINKA usa el layout NetBeans antiguo: src/java/ y src/resources/.
+Maven por defecto busca fuentes en src/main/java/, asi que sin esta declaracion
+explicita el build falla con "No sources to compile" y produce un WAR vacio.
+
+Bug upstream: pendiente de MR en MINKA. Alternativa upstream sugerida: migrar a
+layout estandar de Maven (src/main/java/), pero eso rompe compatibilidad con la
+configuracion de IDE existente del equipo MINTEL.
+---
+ api/pom.xml | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+--- a/api/pom.xml
++++ b/api/pom.xml
+@@ -85,6 +85,12 @@
+
+     <build>
+         <finalName>${project.artifactId}</finalName>
++        <sourceDirectory>src/java</sourceDirectory>
++        <resources>
++            <resource>
++                <directory>src/resources</directory>
++            </resource>
++        </resources>
+         <plugins>
+             <plugin>
+                 <groupId>org.wildfly.plugins</groupId>

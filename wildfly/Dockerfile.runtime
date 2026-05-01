@@ -1,0 +1,62 @@
+# syntax=docker/dockerfile:1.6
+# WildFly 36 + JDK 17 con FirmaEC 5.1 desplegado.
+# Consume los WARs de wildfly/build-artifacts/ producidos por Dockerfile.build.
+
+FROM quay.io/wildfly/wildfly:36.0.1.Final-jdk17
+
+USER root
+
+ENV LANG=es_EC.UTF-8 \
+    LC_ALL=es_EC.UTF-8 \
+    LAUNCH_JBOSS_IN_BACKGROUND=true \
+    TZ=America/Guayaquil
+
+# Herramientas: pg_isready (espera postgres), gettext (envsubst opcional).
+# curl ya viene incluido en la imagen base (curl-minimal) — NO reinstalar para
+# evitar conflicto curl-minimal vs curl completo en UBI 9.
+RUN (microdnf install -y postgresql gettext && microdnf clean all) || \
+    (yum install -y postgresql gettext && yum clean all) || \
+    (dnf install -y postgresql gettext && dnf clean all)
+
+# Driver PostgreSQL JDBC como módulo WildFly.
+# Failover: si recursos/jdbc/postgresql-${PG_DRIVER_VERSION}.jar existe,
+# se usa local (offline); si no, se descarga.
+ARG PG_DRIVER_VERSION=42.2.2
+COPY recursos/jdbc/ /tmp/jdbc/
+RUN mkdir -p /opt/jboss/wildfly/modules/org/postgresql/main && \
+    if [ -f "/tmp/jdbc/postgresql-${PG_DRIVER_VERSION}.jar" ]; then \
+        echo "[runtime] usando JDBC local recursos/jdbc/postgresql-${PG_DRIVER_VERSION}.jar"; \
+        cp "/tmp/jdbc/postgresql-${PG_DRIVER_VERSION}.jar" \
+           "/opt/jboss/wildfly/modules/org/postgresql/main/postgresql-${PG_DRIVER_VERSION}.jar"; \
+    else \
+        echo "[runtime] descargando JDBC ${PG_DRIVER_VERSION} (no encontrado en recursos/jdbc/)"; \
+        curl -fsSL -o "/opt/jboss/wildfly/modules/org/postgresql/main/postgresql-${PG_DRIVER_VERSION}.jar" \
+            "https://jdbc.postgresql.org/download/postgresql-${PG_DRIVER_VERSION}.jar"; \
+    fi && \
+    rm -rf /tmp/jdbc
+
+COPY wildfly/module.xml /opt/jboss/wildfly/modules/org/postgresql/main/module.xml
+
+# Aplicar configuración FirmaEC al standalone.xml default usando JBoss CLI offline.
+# Registra driver postgres + datasource java:/FirmaDigitalDS con placeholders
+# __DB_*__ que serán sustituidos por entrypoint.sh en runtime.
+COPY wildfly/install.cli /tmp/install.cli
+RUN /opt/jboss/wildfly/bin/jboss-cli.sh --file=/tmp/install.cli && \
+    rm /tmp/install.cli && \
+    grep -q "FirmaDigitalDS" /opt/jboss/wildfly/standalone/configuration/standalone.xml
+
+# Artefactos compilados (servicio.war, api.war, libreria.jar) — consumidos del host
+COPY wildfly/build-artifacts/servicio.war        /opt/jboss/wildfly/standalone/deployments/servicio.war
+COPY wildfly/build-artifacts/api.war             /opt/jboss/wildfly/standalone/deployments/api.war
+COPY wildfly/build-artifacts/libreria.jar        /opt/jboss/wildfly/standalone/deployments/libreria.jar
+COPY wildfly/build-artifacts/version-manifest.txt /opt/jboss/version-manifest.txt
+
+COPY wildfly/entrypoint.sh /opt/jboss/entrypoint.sh
+
+RUN chmod +x /opt/jboss/entrypoint.sh && \
+    chown -R jboss:0 /opt/jboss/wildfly /opt/jboss/entrypoint.sh /opt/jboss/version-manifest.txt
+
+USER jboss
+
+EXPOSE 8080 9990
+ENTRYPOINT ["/opt/jboss/entrypoint.sh"]

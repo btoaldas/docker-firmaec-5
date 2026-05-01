@@ -1,0 +1,35 @@
+From: docker-firmaec-5
+Subject: [PATCH] libreria: declarar maven-compiler-plugin 3.14.1 con release Java 17
+
+El parent POM `maven-plugins-22` (transitivo via maven-clean-plugin:2.5)
+fija `maven-compiler-plugin:3.1` en pluginManagement. Esa version es de
+2014 y defaultea a `source/target=1.5`, ignorando la propiedad
+`maven.compiler.release=17` declarada en el pom.
+
+Sin esta declaracion explicita el build falla con:
+  [ERROR] Source option 5 is no longer supported. Use 7 or later.
+  [ERROR] Target option 5 is no longer supported. Use 7 or later.
+
+Bug upstream: el `<plugin>` aparece comentado en el pom desde hace varios
+commits. Pendiente de MR en MINKA.
+---
+ libreria/pom.xml | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+--- a/libreria/pom.xml
++++ b/libreria/pom.xml
+@@ -224,6 +224,14 @@
+                 </configuration>
+             </plugin>-->
+             <!--maven check deprecated-->
++            <plugin>
++                <groupId>org.apache.maven.plugins</groupId>
++                <artifactId>maven-compiler-plugin</artifactId>
++                <version>3.14.1</version>
++                <configuration>
++                    <release>${java.version}</release>
++                </configuration>
++            </plugin>
+             <plugin>
+                 <groupId>org.apache.maven.plugins</groupId>
+                 <artifactId>maven-source-plugin</artifactId>

@@ -1,0 +1,46 @@
+# Configuración offline de WildFly para FirmaEC.
+# Ejecutado por jboss-cli.sh en BUILD time (Dockerfile.runtime).
+# Modifica standalone.xml default registrando driver + datasource con
+# placeholders __DB_*__ que serán sustituidos por entrypoint.sh en runtime.
+
+embed-server --server-config=standalone.xml --std-out=echo
+
+# Driver PostgreSQL JDBC (módulo org.postgresql copiado en Dockerfile)
+/subsystem=datasources/jdbc-driver=postgresql:add( \
+    driver-name=postgresql, \
+    driver-module-name=org.postgresql, \
+    driver-class-name=org.postgresql.Driver, \
+    driver-xa-datasource-class-name=org.postgresql.xa.PGXADataSource)
+
+# Datasource FirmaEC — JNDI java:/FirmaDigitalDS (nombre que la app espera)
+data-source add \
+    --name=FirmaDigitalDS \
+    --jndi-name=java:/FirmaDigitalDS \
+    --driver-name=postgresql \
+    --connection-url=jdbc:postgresql://__DB_HOST__:__DB_PORT__/__DB_NAME__ \
+    --user-name=__DB_USER__ \
+    --password=__DB_PASS__ \
+    --use-ccm=true \
+    --jta=true \
+    --enabled=true \
+    --min-pool-size=2 \
+    --max-pool-size=20 \
+    --validate-on-match=true \
+    --background-validation=false \
+    --check-valid-connection-sql="SELECT 1" \
+    --valid-connection-checker-class-name=org.jboss.jca.adapters.jdbc.extensions.postgres.PostgreSQLValidConnectionChecker \
+    --exception-sorter-class-name=org.jboss.jca.adapters.jdbc.extensions.postgres.PostgreSQLExceptionSorter
+
+# Subir tamaño máximo de POST (para uploads PDF grandes)
+/subsystem=undertow/server=default-server/http-listener=default:write-attribute( \
+    name=max-post-size, \
+    value=104857600)
+
+# System properties que api.war necesita para hacer proxy hacia servicio.war.
+# Sin estas el api responde HTTP 500 ClientProtocolException ("Target host is
+# not specified") porque construye la URL con "null/<endpoint>".
+# Apuntan a localhost:8080 porque ambos WARs corren en el mismo WildFly.
+/system-property=firmadigital-servicio.url:add(value="http://localhost:8080/servicio")
+/system-property=firmadigital-servicio-mobile.url:add(value="http://localhost:8080/servicio")
+
+stop-embedded-server

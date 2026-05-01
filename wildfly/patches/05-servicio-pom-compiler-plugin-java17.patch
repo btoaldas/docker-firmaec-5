@@ -1,0 +1,35 @@
+From: docker-firmaec-5
+Subject: [PATCH] servicio: declarar maven-compiler-plugin 3.14.1 con release Java 17
+
+Mismo problema que en libreria: el parent POM `maven-plugins-22`
+(transitivo) fija `maven-compiler-plugin:3.1` que defaultea a Java 5,
+ignorando `maven.compiler.release=17` del pom.
+
+Sin esta declaracion explicita el build falla con:
+  [ERROR] Source option 5 is no longer supported. Use 7 or later.
+
+A diferencia de libreria, en servicio el plugin no aparece declarado
+de ninguna forma — toca insertarlo entre los dos existentes.
+
+Bug upstream: pendiente de MR en MINKA.
+---
+ servicio/pom.xml | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+--- a/servicio/pom.xml
++++ b/servicio/pom.xml
+@@ -110,6 +110,14 @@
+     <build>
+         <finalName>${project.artifactId}</finalName>
+         <plugins>
++            <plugin>
++                <groupId>org.apache.maven.plugins</groupId>
++                <artifactId>maven-compiler-plugin</artifactId>
++                <version>3.14.1</version>
++                <configuration>
++                    <release>${java.version}</release>
++                </configuration>
++            </plugin>
+             <plugin>
+                 <groupId>org.wildfly.plugins</groupId>
+                 <artifactId>wildfly-maven-plugin</artifactId>
